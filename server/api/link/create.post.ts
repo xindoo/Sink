@@ -35,6 +35,8 @@ defineRouteMeta({
               cloaking: { type: 'boolean', description: 'Enable link cloaking (mask destination URL)' },
               redirectWithQuery: { type: 'boolean', description: 'Append query parameters to destination URL' },
               password: { type: 'string', description: 'Password protection for the link' },
+              unsafe: { type: 'boolean', description: 'Mark link as unsafe, showing a warning page before redirect' },
+              geo: { type: 'object', additionalProperties: { type: 'string' }, description: 'Geo-routing rules (country code to URL)' },
             },
           },
         },
@@ -46,7 +48,7 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const link = await readValidatedBody(event, LinkSchema.parse)
 
-  link.slug = normalizeSlug(event, link.slug)
+  await prepareIncomingLink(event, link)
 
   const existingLink = await getLink(event, link.slug)
   if (existingLink) {
@@ -56,8 +58,9 @@ export default eventHandler(async (event) => {
     })
   }
 
+  await hashLinkPasswordForCreate(link)
+
   await putLink(event, link)
   setResponseStatus(event, 201)
-  const shortLink = buildShortLink(event, link.slug)
-  return { link, shortLink }
+  return buildLinkResponse(event, link)
 })
